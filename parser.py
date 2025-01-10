@@ -41,6 +41,7 @@ def parse_args():
     parser.add_argument('--n_restarts', type=int, default=1, help='number of restart iterations for pgd_attacks')
     parser.add_argument('--alpha', type=float, default=0.01)
     parser.add_argument('--att_init_zeros', action='store_true', help='initialize the adversarial pertubation to zeroes (default: random initialization)')
+    parser.add_argument('--criterion', type=str, default='CE', help='CE, MSE')
 
     args = parser.parse_args()
     print("args")
@@ -103,7 +104,11 @@ def compute_models_args(args):
 
 
 def compute_attack_args(args):
-    args.criterion = torch.nn.CrossEntropyLoss(reduction='none')
+    if args.criterion == 'MSE':
+        args.criterion = torch.nn.MSELoss() 
+    else:
+        args.criterion = torch.nn.CrossEntropyLoss(reduction='none') 
+
     args.eps_l_inf = args.eps_l_inf_from_255 / 255
     args.att_rand_init = not args.att_init_zeros
 

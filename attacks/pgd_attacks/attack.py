@@ -72,7 +72,7 @@ class Attack:
         else:
             pert = F.normalize(perturbation.view(perturbation.shape[0], -1),
                                p=self.p, dim=-1).view(perturbation.shape) * self.eps
-        pert.clamp_(self.pert_lb, self.pert_ub)
+        # pert.clamp_(self.pert_lb, self.pert_ub)
         return pert
 
     def normalize_grad(self, grad):
