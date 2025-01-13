@@ -148,20 +148,12 @@ class APGDAttack():
             ).to(self.device)
         acc_steps = torch.zeros_like(loss_best_steps)
 
-        if not self.is_tf_model:
-            if self.loss == 'ce':
-                criterion_indiv = nn.CrossEntropyLoss(reduction='none')
-            elif self.loss == 'dlr':
-                criterion_indiv = self.dlr_loss
-            else:
-                raise ValueError('unknowkn loss')
+        if self.loss == 'ce':
+            criterion_indiv = nn.CrossEntropyLoss(reduction='none')
+        elif self.loss == 'dlr':
+            criterion_indiv = self.dlr_loss
         else:
-            if self.loss == 'ce':
-                criterion_indiv = self.model.get_logits_loss_grad_xent
-            elif self.loss == 'dlr':
-                criterion_indiv = self.model.get_logits_loss_grad_dlr
-            else:
-                raise ValueError('unknowkn loss')
+            raise ValueError('unknowkn loss')
         
         # calculate gradient of the batch
         x_adv.requires_grad_()
@@ -282,27 +274,7 @@ class APGDAttack():
                         grad[start_idx:end_idx] += grad_curr
                 # sum up and average the gradient
                 grad /= float(self.eot_iter)
-            """
-            x_adv.requires_grad_()
-            grad = torch.zeros_like(x)
-            for _ in range(self.eot_iter):
-
-                if not self.is_tf_model:
-                    with torch.enable_grad():
-                        logits = self.model(x_adv)
-                        loss_indiv = criterion_indiv(logits, y)
-                        loss = loss_indiv.sum()
-    
-                    grad += torch.autograd.grad(loss, [x_adv])[0].detach()
-                else:
-                    if self.y_target is None:
-                        logits, loss_indiv, grad_curr = criterion_indiv(x_adv, y)
-                    else:
-                        logits, loss_indiv, grad_curr = criterion_indiv(x_adv, y, self.y_target)
-                    grad += grad_curr
             
-            grad /= float(self.eot_iter)
-            """
             # calculate accuracy of the model on the pertubated input
             pred = logits.detach().max(1)[1] == y
             acc = torch.min(acc, pred)
@@ -371,10 +343,8 @@ class APGDAttack():
         self.init_hyperparam(x)
 
         # x = x.detach().clone().float().to(self.device)
-        if not self.is_tf_model:
-            y_pred = self.model(x).max(1)[1]
-        else:
-            y_pred = self.model.predict(x).max(1)[1]
+        y_pred = self.model(x).max(1)[1]
+        
         if y is None:
             #y_pred = self.predict(x).max(1)[1]
             y = y_pred.detach().clone().long().to(self.device)
