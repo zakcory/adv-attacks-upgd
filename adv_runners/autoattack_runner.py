@@ -199,7 +199,7 @@ class AutoAttack():
                 # diff = (adv_curr.to(self.device)-x_orig[robust_flags].to(self.device))
                 # delta = diff.abs().max(dim = 0)[0]*torch.sign(diff.mean(dim = 0)).clamp_(-self.epsilon, self.epsilon)
 
-                delta.clamp_(-self.epsilon, self.epsilon)
+                delta = torch.clamp(delta, -self.epsilon, self.epsilon)
                 torch.save(delta, 'autoattack_pert_Wong2020.pt')
                 print("delta shape:",delta.shape)
                 print("delta max value:",(delta.max()))

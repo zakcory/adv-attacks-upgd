@@ -12,7 +12,7 @@ def run_adv_attacks(args):
     #                        device=args.device, dtype=args.dtype, verbose=args.runner_verbose)
     # adv_runner = UniversalAdvRunner(args.model, args.attack_obj, args.data_RGB_size,
     #                         device=args.device, dtype=args.dtype, verbose=args.runner_verbose)
-    adv_runner = AutoAttack(args.model, attacks_to_run=['apgd-ce'], eps=args.eps_l_inf,version = 'universal')
+    adv_runner = AutoAttack(args.model, attacks_to_run=['apgd-ce'], eps=args.eps_l_inf, version = 'universal')
     print(f'Dataset: {args.dataset}, Model: {args.model_name},\n'
           f'Attack: {args.attack_name} with L_inf epsilon={args.eps_l_inf},\n'
           f'Attack iterations={args.n_iter} and restarts={args.n_restarts}')
