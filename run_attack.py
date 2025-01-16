@@ -1,8 +1,8 @@
 import torch
 import gc
 from parser import get_args, save_img_tensors
-from AdvRunner import AdvRunner
-from AdvRunner_universal import UniversalAdvRunner
+from adv_runners.AdvRunner import AdvRunner
+from adv_runners.AdvRunner_universal import UniversalAdvRunner
 from autoattack_runner import AutoAttack
 
 

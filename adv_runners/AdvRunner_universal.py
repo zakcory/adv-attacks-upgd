@@ -1,4 +1,4 @@
-from AdvRunner import AdvRunner
+from adv_runners.AdvRunner import AdvRunner
 import torch
 import numpy as np
 from tqdm import trange
@@ -27,15 +27,23 @@ class UniversalAdvRunner(AdvRunner):
             n_robust_batches = int(np.ceil(n_robust_examples / bs))
         self.attack.set_multiplier(targeted=False)
 
-        
-        
 
-        x_adv = x_orig[robust_flags].detach().clone()
-        y_adv = y_orig[robust_flags].detach().clone()
+        # make mask
+        adv_mask = torch.load('adv_tensor.pt')
+        n_mask_batches = int(np.ceil(torch.sum(adv_mask) / bs))
+        print(f"N Examples {torch.sum(adv_mask)}")
+
+
+        x_adv = x_orig[robust_flags][adv_mask].detach().clone()
+        y_adv = y_orig[robust_flags][adv_mask].detach().clone()
+
+        x_adv, y_adv = self.remove_class(x_adv, y_adv, [0, 1, 2, 4, 5, 6, 7, 8, 9])
+        print(f"Number of cats: {x_adv.shape}")
+
 
         # remove classes
-        x_adv, y_adv = self.remove_class(x_adv, y_adv, [0, 1, 2, 4, 5, 6, 7, 8, 9])
         n_robust_batches = int(np.ceil(len(y_adv) / bs))
+
 
 
         adv_perts = torch.zeros_like(x_orig).detach()
@@ -71,14 +79,14 @@ class UniversalAdvRunner(AdvRunner):
                     start_idx = batch_idx * bs
                     end_idx = min((batch_idx + 1) * bs, n_examples)
                     batch_indices = torch.arange(start_idx, end_idx, device=orig_device)
-                    x = x_adv[start_idx:end_idx, :].detach().clone().to(self.device)
+                    x = x_adv[start_idx:end_idx].detach().clone().to(self.device)
                     y = y_adv[start_idx:end_idx].detach().clone().to(self.device)
 
                     # make sure that x is a 4d tensor even if there is only a single datapoint left
                     if len(x.shape) == 3:
                         x.unsqueeze_(dim=0)
                     # start_events[batch_idx].record()
-                    curr_gradient += self.attack.perturb(x, y, pert_tmp)
+                    curr_gradient += self.attack.perturb(x, y, pert_tmp, targeted=False)
                     # end_events[batch_idx].record()
                     # torch.cuda.empty_cache()
                     # with torch.no_grad():
@@ -100,7 +108,7 @@ class UniversalAdvRunner(AdvRunner):
 
                 with torch.no_grad():
                     pert_init = self.attack.step(pert_init, avg_graident)   # step
-                    eval_loss, succ = self.attack.eval_pert(x_adv[100:350].detach().clone().to('cuda'), y_adv[100:350].detach().clone().to('cuda'), pert_init)   # calculate loss
+                    eval_loss, succ = self.attack.eval_pert(x_adv.detach().clone().to('cuda'), y_adv.detach().clone().to('cuda'), pert_init)   # calculate loss
                     print(f"Epoch {k+1}: Loss={eval_loss.mean()}, Acc={1 - succ.sum().div(len(succ))}")
 
         

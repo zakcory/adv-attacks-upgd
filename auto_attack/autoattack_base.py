@@ -39,7 +39,7 @@ class APGDAttack():
     def __init__(
             self,
             predict,
-            n_iter=100,
+            n_iter=200,
             norm='Linf',
             n_restarts=1,
             eps=None,
@@ -52,12 +52,16 @@ class APGDAttack():
             device=None,
             use_largereps=False,
             is_tf_model=False,
+            targeted=False,
+            target_class=3,
             logger=None):
         """
         AutoPGD implementation in PyTorch
         """
         
         self.model = predict
+        self.targeted = targeted
+        self.target_class = target_class 
         self.n_iter = n_iter
         self.eps = eps
         self.norm = norm
@@ -168,16 +172,32 @@ class APGDAttack():
                 end_idx = min( (batch_idx + 1) * bs, x.shape[0])
 
                 x_batch = x_adv[start_idx:end_idx].clone().to(self.device).requires_grad_()
-                y_batch = y[start_idx:end_idx].clone().to(self.device)
+                if not self.targeted:
+                    y_batch = y[start_idx:end_idx].clone().to(self.device)
+                else:
+                    y_batch = torch.zeros(10)
+                    y_batch[self.target_class]=1
+                    y_batch=y_batch.unsqueeze(0)
+                    y_batch=y_batch.expand((end_idx-start_idx), 10).to(self.device)
+                    print(f"Y Shape: {y_batch.shape}")
+
+                if len(x_batch.shape) == 3:
+                    x_batch.unsqueeze_(dim=0)
+
+                # print(f"Batch Size: {x_batch.shape}")
 
                 if not self.is_tf_model:
                     with torch.enable_grad():
                         logits[start_idx:end_idx] = self.model(x_batch)
+                        print(f"Batch Logits Shape: {logits[start_idx:end_idx].shape}")
                         loss_indiv[start_idx:end_idx] = criterion_indiv(logits[start_idx:end_idx], y_batch)
                         loss = loss_indiv[start_idx:end_idx].sum()
 
                     # print(f"Grad Check: {loss, x_batch}")
-                    grad[start_idx:end_idx] += torch.autograd.grad(loss, [x_batch])[0].detach()
+                    if not self.targeted:
+                        grad[start_idx:end_idx] += torch.autograd.grad(loss, [x_batch])[0].detach()
+                    else:
+                        grad[start_idx:end_idx] -= torch.autograd.grad(loss, [x_batch])[0].detach()
                 else:
                     if self.y_target is None:
                         logits, loss_indiv, grad_curr = criterion_indiv(x_batch, y_batch)
@@ -255,7 +275,14 @@ class APGDAttack():
                     end_idx = min( (batch_idx + 1) * bs, x.shape[0])
 
                     x_batch = x_adv[start_idx:end_idx].clone().to(self.device).requires_grad_()
-                    y_batch = y[start_idx:end_idx].clone().to(self.device)
+                    if not self.targeted:
+                        y_batch = y[start_idx:end_idx].clone().to(self.device)
+                    else:
+                        y_batch = torch.zeros(10)
+                        y_batch[self.target_class]=1
+                        y_batch=y_batch.unsqueeze(0)
+                        y_batch=y_batch.expand((end_idx-start_idx), 10).to(self.device)
+                        
 
                     if not self.is_tf_model:
                         with torch.enable_grad():
@@ -264,7 +291,10 @@ class APGDAttack():
                             loss = loss_indiv[start_idx:end_idx].sum()
 
                         # print(f"Grad Check: {loss, x_batch}")
-                        grad[start_idx:end_idx] += torch.autograd.grad(loss, [x_batch])[0].detach()
+                        if not self.targeted:
+                            grad[start_idx:end_idx] += torch.autograd.grad(loss, [x_batch])[0].detach()
+                        else:
+                            grad[start_idx:end_idx] -= torch.autograd.grad(loss, [x_batch])[0].detach()
                     else:
                         if self.y_target is None:
                             logits, loss_indiv, grad_curr = criterion_indiv(x_batch, y_batch)
@@ -321,6 +351,10 @@ class APGDAttack():
                   
                   counter3 = 0
                   #k = max(k - self.size_decr, self.n_iter_min)
+              if (i+1)%10==0:
+                  with torch.no_grad():
+                    loss_avg = torch.mean(loss_best)
+                  print(f"Epoch {i+1}, Loss={loss_avg}")
 
         #
         

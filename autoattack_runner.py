@@ -6,7 +6,7 @@ import torch
 
 from autoattack import checks
 from autoattack.state import EvaluationState
-from attacks.auto_attack.autoattack_base import APGDAttack
+from auto_attack.autoattack_base import APGDAttack
 from tqdm import tqdm
 
 class logger():
@@ -31,13 +31,15 @@ class AutoAttack():
         self.device = device
         self.logger = logger()
 
+    
+
         # if version in ['standard', 'plus', 'rand'] and attacks_to_run != []:
         #     raise ValueError("attacks_to_run will be overridden unless you use version='custom'")
         
         if not self.is_tf_model:
-            self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=100, verbose=False,
+            self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=400, verbose=False,
                 eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed,
-                device=self.device, logger=self.logger)
+                device=self.device, logger=self.logger, targeted=True)
             
         # from .fab_pt import FABAttack_PT
         # self.fab = FABAttack_PT(self.model, n_restarts=5, n_iter=100, eps=self.epsilon, seed=self.seed,
@@ -54,6 +56,16 @@ class AutoAttack():
     
         if version in ['standard', 'plus', 'rand']:
             self.set_version(version)
+
+    def remove_class(self, x, y, class_index):
+
+        removed_classes = ~y.eq(class_index[0])
+        for cl in class_index[1:]:
+            removed_classes = torch.logical_and(removed_classes ,~y.eq(cl))
+
+        x_patched = x[removed_classes].clone()
+        y_patched = y[removed_classes].clone()
+        return x_patched, y_patched
         
     def get_logits(self, x):
         if not self.is_tf_model:
@@ -161,10 +173,33 @@ class AutoAttack():
                     self.apgd.loss = 'ce'
                     self.apgd.seed = self.get_seed()
 
-                    delta = torch.load('autoattack_pert_Wong2020.pt')
+                    adv_mask = torch.load('adv_tensor.pt')
 
+
+                    # delta = torch.load('autoattack_pert_Wong2020.pt')
+
+                    # robust flags
                     # adv_curr, acc, loss_best, x_best_adv = self.apgd.attack_single_run(x_orig.clone()[robust_flags].to(self.device)\
-                    #                                                     , y_orig.clone()[robust_flags], n_batches) 
+                    #                                                     , y_orig.clone()[robust_flags].to(self.device), n_batches) 
+
+                    # mask the unneccessary classes
+                    # adv_curr, acc, loss_best, x_best_adv = self.apgd.attack_single_run(x_orig.clone()[robust_flags][adv_mask].to(self.device)\
+                    #                                                     , y_orig.clone()[robust_flags][adv_mask].to(self.device), n_batches) 
+                    
+                    # remove classes
+                    removed_classes = [9, 3]
+                    x_train, y_train = self.remove_class(x_orig.clone()[robust_flags][adv_mask], y_orig.clone()[robust_flags][adv_mask], removed_classes)
+
+                    n_examples = x_train.shape[0]
+                    n_batches = int(np.ceil(n_examples/250))
+
+                    adv_curr, acc, loss_best, x_best_adv = self.apgd.attack_single_run(x_train.to(self.device)\
+                                                                        , y_train.to(self.device), n_batches) 
+
+                    # n_examples = torch.sum(adv_mask)
+                    # n_batches = int(np.ceil(n_examples / bs))
+
+                    
                     # torch.save(adv_curr, 'pert_img_Wang2023Better.pt')
                     # adv_curr = torch.load('pert_img_Wong2020.pt')
                 
@@ -172,38 +207,60 @@ class AutoAttack():
                     # apgd on dlr loss
                     self.apgd.loss = 'dlr'
                     self.apgd.seed = self.get_seed()
-                    adv_curr = self.apgd.perturb(x, y) #cheap=True
+                    adv_curr, acc, loss_best, x_best_adv = self.apgd.attack_single_run(x_orig.clone()[robust_flags][adv_mask].to(self.device)\
+                                                                        , y_orig.clone()[robust_flags][adv_mask].to(self.device), n_batches)  #cheap=True
                 
                 else:
                     raise ValueError('Attack not supported')
-                # print("shapes: ",x_orig.shape,adv_curr.shape)
-                # diff = (adv_curr.to(self.device)-x_orig[robust_flags].to(self.device))
-                # delta = diff.abs().max(dim = 0)[0]*torch.sign(diff.mean(dim = 0)).clamp_(-self.epsilon, self.epsilon)
 
-                delta = torch.clamp(delta, -self.epsilon, self.epsilon)
-                torch.save(delta, 'autoattack_pert_Wong2020.pt')
+
+                # diff = (x_best_adv.to(self.device)-x_orig[robust_flags].to(self.device))   # just robust flags
+                # diff = (x_best_adv.to(self.device)-x_orig[robust_flags][adv_mask].to(self.device))    # remove classes
+                diff = (x_best_adv.to(self.device)-x_train.to(self.device))
+
+                print("diff shape:",diff.shape)
+                print("diff max value:",(diff.max()))
+                delta = self.epsilon * torch.sign(diff.mean(dim = 0))
+                
+                # delta = torch.load('autoattack_pert_Wong2020_best.pt')
+
+
+                torch.save(delta, 'autoattack_pert_Wong2020_mask.pt')
                 print("delta shape:",delta.shape)
                 print("delta max value:",(delta.max()))
                 print(f"epsilon flag:{delta.max() <= self.epsilon}")
 
+                # n_examples = x_orig[robust_flags][adv_mask].shape[0]     # remove classes
+                # n_examples = x_orig[robust_flags].shape[0]      # just robust flags
+
                 bs = 250
 
-                n_batches = int(np.ceil(8334 / bs))
+                n_batches = int(np.ceil(n_examples / bs))
 
-                y_adv = torch.zeros_like(y_orig[robust_flags]).to(self.device)
+                y_adv = torch.zeros_like(y_train).to(self.device)
+                # y_adv = torch.zeros_like(y_orig[robust_flags][adv_mask]).to(self.device)     # robust and mask
+                # y_adv = torch.zeros_like(y_orig[robust_flags]).to(self.device)   # just robust flags
 
                 for batch_idx in tqdm(range(n_batches)):
                     start_idx = batch_idx * bs
-                    end_idx = min( (batch_idx + 1) * bs, x_orig.shape[0])
+                    # end_idx = min( (batch_idx + 1) * bs, x_orig[robust_flags].shape[0])    # just robust flags
+                    # end_idx = min( (batch_idx + 1) * bs, x_orig[robust_flags][adv_mask].shape[0])    # robust and mask
+                    end_idx = min( (batch_idx + 1) * bs, x_train.shape[0])
 
-                    x = x_orig[robust_flags][start_idx:end_idx, :].clone().to(self.device)
+                    # x = x_orig[robust_flags][adv_mask][start_idx:end_idx, :].clone().to(self.device)   # robust and mask
+                    # x = x_orig[robust_flags][start_idx:end_idx, :].clone().to(self.device)    # just robust flags
+                    x = x_train[start_idx:end_idx, :].clone().to(self.device)
                     output = self.get_logits(x + delta).max(dim=1)[1]
+                    print(f"Shape of output: {output.shape}")
+                    print(f"Shape of y_adv: {y_adv[start_idx: end_idx].shape}")
                     y_adv[start_idx: end_idx] = output
                 
-                adv_accuracy = (y_adv == y_orig[robust_flags].to(self.device)).sum().div(len(y_orig))
+                # adv_accuracy = (y_adv == y_orig[robust_flags].to(self.device)).sum().div(len(y_orig[robust_flags]))    # just robust flags
+                # adv_accuracy = (y_adv == y_orig[robust_flags][adv_mask].to(self.device)).sum().div(len(y_orig[robust_flags][adv_mask]))    # remove classes
+                adv_accuracy = (y_adv == y_train.to(self.device)).sum().div(len(y_train))
                 print(f"Adv. Achieved Accuracy: {adv_accuracy}")
 
-                # torch.save(delta, 'autoattack_pert_Wong2020.pt')
+                torch.save(delta, 'autoattack_pert_Wong2020_mask.pt')
                     
 
 
