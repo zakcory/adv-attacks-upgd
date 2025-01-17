@@ -179,7 +179,6 @@ class APGDAttack():
                     y_batch[self.target_class]=1
                     y_batch=y_batch.unsqueeze(0)
                     y_batch=y_batch.expand((end_idx-start_idx), 10).to(self.device)
-                    print(f"Y Shape: {y_batch.shape}")
 
                 if len(x_batch.shape) == 3:
                     x_batch.unsqueeze_(dim=0)
@@ -252,7 +251,7 @@ class APGDAttack():
                 a = 0.75 if i > 0 else 1.0
 
                 if self.norm == 'Linf':
-                    x_adv_1 = x_adv + step_size * torch.sign(grad).mean(dim = 0)
+                    x_adv_1 = x_adv + step_size * torch.sign(grad.mean(dim=0))
 
                     x_adv_1 = torch.clamp(torch.min(torch.max(x_adv_1,
                         x - self.eps), x + self.eps), 0.0, 1.0)

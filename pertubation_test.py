@@ -28,7 +28,7 @@ def main():
     else:
         model = load_model(model_name, dataset="cifar10", threat_model='Linf').to(device)
 
-    perturb = torch.load("autoattack_pert_Wong2020.pt")
+    perturb = torch.load("autoattack_pert_Wong2020_mask.pt")
     print("pert shape:",perturb.shape)
     print("pert max value:",(perturb.max()))
 

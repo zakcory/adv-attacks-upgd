@@ -37,7 +37,7 @@ class AutoAttack():
         #     raise ValueError("attacks_to_run will be overridden unless you use version='custom'")
         
         if not self.is_tf_model:
-            self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=400, verbose=False,
+            self.apgd = APGDAttack(self.model, n_restarts=5, n_iter=100, verbose=False,
                 eps=self.epsilon, norm=self.norm, eot_iter=1, rho=.75, seed=self.seed,
                 device=self.device, logger=self.logger, targeted=True)
             
@@ -187,8 +187,9 @@ class AutoAttack():
                     #                                                     , y_orig.clone()[robust_flags][adv_mask].to(self.device), n_batches) 
                     
                     # remove classes
-                    removed_classes = [9, 3]
-                    x_train, y_train = self.remove_class(x_orig.clone()[robust_flags][adv_mask], y_orig.clone()[robust_flags][adv_mask], removed_classes)
+                    # removed_classes = [1, 4, 5, 6, 7, 8, 9]
+                    # x_train, y_train = self.remove_class(x_orig.clone()[robust_flags], y_orig.clone()[robust_flags], removed_classes)
+                    x_train, y_train = x_orig.clone()[robust_flags], y_orig.clone()[robust_flags]
 
                     n_examples = x_train.shape[0]
                     n_batches = int(np.ceil(n_examples/250))

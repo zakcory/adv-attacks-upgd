@@ -10,12 +10,25 @@ def run_adv_attacks(args):
     print(f'Running evaluation of adversarial attacks:')
     # adv_runner = AdvRunner(args.model, args.attack_obj, args.data_RGB_size,
     #                        device=args.device, dtype=args.dtype, verbose=args.runner_verbose)
-    # adv_runner = UniversalAdvRunner(args.model, args.attack_obj, args.data_RGB_size,
-    #                         device=args.device, dtype=args.dtype, verbose=args.runner_verbose)
+    # combinations = [[False, False, False],
+    #                 [True, False, False],
+    #                 [True, False, True],
+    #                 [True, True, False],
+    #                 [True, True, True]]
+    
+    # for conf_comb in combinations:
+    #     classes_combinations = [[0, 1, 3, 7, 8, 9],
+    #                             [1, 6, 7, 8, 9],
+    #                             [0, 2, 3, 4, 5]] if conf_comb[2] else [[0]]
+            
+    #     for class_comb in classes_combinations:
+    #         print(f"Removing classes: {class_comb}")
+    # adv_runner = UniversalAdvRunner(args.model, args.attack_obj, args.data_RGB_size, 
+    #                         args.device, args.dtype, *conf_comb, class_comb, verbose=args.runner_verbose)
     adv_runner = AutoAttack(args.model, attacks_to_run=['apgd-ce'], eps=args.eps_l_inf, version = 'universal')
     print(f'Dataset: {args.dataset}, Model: {args.model_name},\n'
-          f'Attack: {args.attack_name} with L_inf epsilon={args.eps_l_inf},\n'
-          f'Attack iterations={args.n_iter} and restarts={args.n_restarts}')
+        f'Attack: {args.attack_name} with L_inf epsilon={args.eps_l_inf},\n'
+        f'Attack iterations={args.n_iter} and restarts={args.n_restarts}')
     print("Shape of input samples:")
     print(args.data_shape)
     print("Data RGB range:")
@@ -25,18 +38,20 @@ def run_adv_attacks(args):
     att_report_info = args.attack_obj.report_info
 
 
-    (init_accuracy, x_adv, y_adv, robust_accuracy, adv_loss,
-     acc_steps, avg_loss_steps, perts_max_l_inf,
-     adv_batch_compute_time_mean, adv_batch_compute_time_std, tot_adv_compute_time, tot_adv_compute_time_std) = \
-        adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
+    # (init_accuracy, x_adv, y_adv, robust_accuracy, adv_loss,
+    # acc_steps, avg_loss_steps, perts_max_l_inf,
+    # adv_batch_compute_time_mean, adv_batch_compute_time_std, tot_adv_compute_time, tot_adv_compute_time_std) = \
+    #     adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
 
-    adv_succ_ratio = (init_accuracy - robust_accuracy) / init_accuracy
-    print("reporting results for adversarial attack on Model: " + args.model_name)
-    print("attacked model clean accuracy:")
-    print(init_accuracy)
-    print(f'robust accuracy: {robust_accuracy}')
-    print(f'adversarial attack success ratio: {adv_succ_ratio}')
-    print(f'adversarial average loss: {adv_loss}')
+    _ = adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
+
+    # adv_succ_ratio = (init_accuracy - robust_accuracy) / init_accuracy
+    # print("reporting results for adversarial attack on Model: " + args.model_name)
+    # print("attacked model clean accuracy:")
+    # print(init_accuracy)
+    # print(f'robust accuracy: {robust_accuracy}')
+    # print(f'adversarial attack success ratio: {adv_succ_ratio}')
+    # print(f'adversarial average loss: {adv_loss}')
     # print(f'perturbations L_inf norm limitation : {args.eps_l_inf}')
     # print(f'max L_inf in perturbations: {perts_max_l_inf}')
     # print("attack mean compute time over data batches")
@@ -48,22 +63,22 @@ def run_adv_attacks(args):
     # print("attack total compute time std over data batches")
     # print(tot_adv_compute_time_std)
 
-    if att_report_info:
-        adv_succ_ratio_steps = [(init_accuracy - adv_acc) / init_accuracy for adv_acc in acc_steps]
-        print("reporting the optimization info of the attack:")
-        print(f'Model: {args.model_name}, adversarial robust accuracy for attack iterations: {acc_steps.tolist()}')
-        print(f'Model: {args.model_name}, adversarial attack success ratio for attack iterations: {adv_succ_ratio_steps}')
-        print(f'Model: {args.model_name}, adversarial loss for attack iterations: {avg_loss_steps.tolist()}')
+    # if att_report_info:
+    #     adv_succ_ratio_steps = [(init_accuracy - adv_acc) / init_accuracy for adv_acc in acc_steps]
+    #     print("reporting the optimization info of the attack:")
+    #     print(f'Model: {args.model_name}, adversarial robust accuracy for attack iterations: {acc_steps.tolist()}')
+    #     print(f'Model: {args.model_name}, adversarial attack success ratio for attack iterations: {adv_succ_ratio_steps}')
+    #     print(f'Model: {args.model_name}, adversarial loss for attack iterations: {avg_loss_steps.tolist()}')
 
-    if args.save_results:
-        save_path = args.adv_pert_save_path + '/adv_input.pt'
-        print("saving adv inputs tensors to path:")
-        print(save_path)
-        torch.save(x_adv, args.adv_pert_save_path + '/adv_input.pt')
-        save_path = args.imgs_save_path + '/adv_inputs'
-        print("saving adv inputs images to path:")
-        print(save_path)
-        save_img_tensors(save_path, x_adv, args.y_test, y_adv, args.labels_str_dict)
+    # if args.save_results:
+    #     save_path = args.adv_pert_save_path + '/adv_input.pt'
+    #     print("saving adv inputs tensors to path:")
+    #     print(save_path)
+    #     torch.save(x_adv, args.adv_pert_save_path + '/adv_input.pt')
+    #     save_path = args.imgs_save_path + '/adv_inputs'
+    #     print("saving adv inputs images to path:")
+    #     print(save_path)
+    #     save_img_tensors(save_path, x_adv, args.y_test, y_adv, args.labels_str_dict)
 
 
 if __name__ == '__main__':
