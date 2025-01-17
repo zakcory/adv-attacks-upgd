@@ -10,6 +10,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 def main():
+
     classes = ('airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship',
                                 'truck')
     transforms_list = [transforms.ToTensor()]
@@ -20,6 +21,9 @@ def main():
 
     device = "cuda"
     epsilon = 8 / 255
+
+    RGB_size = torch.tensor([1, 1, 1]).unsqueeze(0).unsqueeze(2).unsqueeze(3).to(device)
+
     
     model_name = 'Wong2020Fast'#'Wang2023Better_WRN-28-10'#
     if model_name == "ResNet18":
@@ -29,8 +33,9 @@ def main():
         model = load_model(model_name, dataset="cifar10", threat_model='Linf').to(device)
 
     perturb = torch.load("autoattack_pert_Wong2020_mask.pt")
-    print("pert shape:",perturb.shape)
-    print("pert max value:",(perturb.max()))
+    print("Pertubation Shape:",perturb.shape)
+    print(f"Pertubation Norm Test: {perturb.abs().max() <= epsilon}")
+
 
     y_pred_corrupted = torch.zeros_like(y_true)
 

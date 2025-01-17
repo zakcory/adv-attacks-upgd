@@ -188,7 +188,6 @@ class APGDAttack():
                 if not self.is_tf_model:
                     with torch.enable_grad():
                         logits[start_idx:end_idx] = self.model(x_batch)
-                        print(f"Batch Logits Shape: {logits[start_idx:end_idx].shape}")
                         loss_indiv[start_idx:end_idx] = criterion_indiv(logits[start_idx:end_idx], y_batch)
                         loss = loss_indiv[start_idx:end_idx].sum()
 
