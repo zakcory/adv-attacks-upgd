@@ -5,8 +5,13 @@ from tqdm import trange
 
 
 class UniversalAdvRunner(AdvRunner):
-    def __init__(self, model, attack, data_RGB_size, device, dtype, verbose=False):
+    def __init__(self, model, attack, data_RGB_size, device, dtype, \
+                to_train_on_robust, to_make_mask, to_remove_classes, classes_to_remove, verbose=False):
         super(UniversalAdvRunner, self).__init__(model, attack, data_RGB_size, device, dtype)
+        self.to_train_on_robust = to_train_on_robust
+        self.to_make_mask = to_make_mask
+        self.to_remove_classes = to_remove_classes
+        self.classes_to_remove = classes_to_remove
 
     def remove_class(self, x, y, class_index):
 
@@ -27,34 +32,47 @@ class UniversalAdvRunner(AdvRunner):
             n_robust_batches = int(np.ceil(n_robust_examples / bs))
         self.attack.set_multiplier(targeted=False)
 
+        # set up the training set of images
+        x_train = x_orig.clone()
+        y_train = y_orig.clone()
 
         # make mask
         adv_mask = torch.load('adv_tensor.pt')
-        n_mask_batches = int(np.ceil(torch.sum(adv_mask) / bs))
-        print(f"N Examples {torch.sum(adv_mask)}")
 
+        # check configs
+        if self.to_train_on_robust:
+            x_train = x_train[robust_flags].clone()
+            y_train = y_train[robust_flags].clone()
 
-        x_adv = x_orig[robust_flags][adv_mask].detach().clone()
-        y_adv = y_orig[robust_flags][adv_mask].detach().clone()
+        if self.to_make_mask:
+            x_train = x_train[adv_mask].clone()
+            y_train = y_train[adv_mask].clone()
 
-        x_adv, y_adv = self.remove_class(x_adv, y_adv, [0, 1, 2, 4, 5, 6, 7, 8, 9])
-        print(f"Number of cats: {x_adv.shape}")
+        if self.to_remove_classes:
+            x_train, y_train = self.remove_class(x_train, y_train, self.classes_to_remove)
 
+        x_train = x_train.detach()
+        y_train = y_train.detach()
 
-        # remove classes
-        n_robust_batches = int(np.ceil(len(y_adv) / bs))
+        # define the batch size according to the train set
+        n_train_examples = x_train.shape[0]
+        n_train_batches = int(np.ceil(n_train_examples / bs))
 
+        # sample from the train set for intermediate validation
+        val_ratio = 0.1
+        val_mask = torch.rand(n_train_examples) < val_ratio
+        val_x = x_train[val_mask].clone().detach().to(self.device)
+        val_y = y_train[val_mask].clone().detach().to(self.device)
 
-
-        adv_perts = torch.zeros_like(x_orig).detach()
-        adv_perts_loss = torch.zeros(n_examples, dtype=self.dtype, device=orig_device)
-        if self.attack_report_info:
-            info_shape = [self.attack_restarts, self.attack_iter + 1, n_examples]
-            all_succ = torch.zeros(info_shape, dtype=self.dtype, device=orig_device)
-            all_loss = torch.zeros(info_shape, dtype=self.dtype, device=orig_device)
-        else:
-            all_succ = None
-            all_loss = None
+        # adv_perts = torch.zeros_like(x_orig).detach()
+        # adv_perts_loss = torch.zeros(n_examples, dtype=self.dtype, device=orig_device)
+        # if self.attack_report_info:
+        #     info_shape = [self.attack_restarts, self.attack_iter + 1, n_examples]
+        #     all_succ = torch.zeros(info_shape, dtype=self.dtype, device=orig_device)
+        #     all_loss = torch.zeros(info_shape, dtype=self.dtype, device=orig_device)
+        # else:
+        #     all_succ = None
+        #     all_loss = None
 
         for rest in range(self.attack_restarts):
         # with torch.cuda.device(self.device):
@@ -67,20 +85,20 @@ class UniversalAdvRunner(AdvRunner):
             else:
                 pert_init = torch.zeros_like(x.shape[1:]).unsqueeze(0)
 
-            for k in range(self.attack_iter):
+            for k in trange(self.attack_iter):
                 pert_tmp = pert_init.detach().clone().requires_grad_()
 
                 # test loss and succ for restart and iter and update
 
                 curr_gradient = torch.zeros_like(pert_init)   # initialize gradient
 
-                for batch_idx in trange(n_robust_batches):
+                for batch_idx in range(n_train_batches):
                     
                     start_idx = batch_idx * bs
-                    end_idx = min((batch_idx + 1) * bs, n_examples)
-                    batch_indices = torch.arange(start_idx, end_idx, device=orig_device)
-                    x = x_adv[start_idx:end_idx].detach().clone().to(self.device)
-                    y = y_adv[start_idx:end_idx].detach().clone().to(self.device)
+                    end_idx = min((batch_idx + 1) * bs, n_train_examples)
+                    # batch_indices = torch.arange(start_idx, end_idx, device=orig_device)
+                    x = x_train[start_idx:end_idx].detach().clone().to(self.device)
+                    y = y_train[start_idx:end_idx].detach().clone().to(self.device)
 
                     # make sure that x is a 4d tensor even if there is only a single datapoint left
                     if len(x.shape) == 3:
@@ -104,21 +122,30 @@ class UniversalAdvRunner(AdvRunner):
                     #     if self.attack_report_info:
                     #         all_succ[:, :, start_idx:end_idx] = all_batch_succ.to(orig_device)
                     #         all_loss[:, :, start_idx:end_idx] = all_batch_loss.to(orig_device)
-                avg_graident = curr_gradient / n_examples
+                avg_graident = curr_gradient / n_train_examples
 
                 with torch.no_grad():
                     pert_init = self.attack.step(pert_init, avg_graident)   # step
-                    eval_loss, succ = self.attack.eval_pert(x_adv.detach().clone().to('cuda'), y_adv.detach().clone().to('cuda'), pert_init)   # calculate loss
-                    print(f"Epoch {k+1}: Loss={eval_loss.mean()}, Acc={1 - succ.sum().div(len(succ))}")
-
-        
+                    inter_loss, inter_succ = self.attack.eval_pert(val_x, val_y, pert_init)
+                    if (k + 1) % 10 == 0:
+                        print(f"Epoch {k+1}, Loss on val: {inter_loss.mean()}, Accuracy of the model on val: {1 - inter_succ.sum().div(len(inter_succ))}")
 
         # verifying L-inf
-        perts_max_l_inf = (pert_init.abs() / self.attack.data_RGB_size).view(-1).max(dim=0)[0].item()
-        print(f"L-inf Norm: {perts_max_l_inf}")
+        print(f"L-inf Norm Test: {pert_init.abs().max() < self.attack.eps_ratio}")
 
-            
-            
+        x_test = x_orig.clone().detach()
+        y_test = y_orig.clone().detach()
+
+        # testing model final accuracy
+        print("Test for final accuracy")
+        y_pred_corrupted = torch.zeros_like(y_test)
+
+        for i in tqdm(range(int(np.ceil(n_examples / bs)))):
+            y_corrupted = model(x_test[i*bs:(i+1)*250].to(device) + pert_init)
+            y_pred_corrupted[i*bs:(i+1)*bs] = y_corrupted.argmax(dim=1)
+        
+        print("Accuracy:",(y_pred_corrupted==y_test).sum().div(len(y_true)))
+
             # torch.cuda.synchronize()
             # adv_batch_compute_times = [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
             # adv_batch_compute_time_mean = np.mean(adv_batch_compute_times)

@@ -10,40 +10,41 @@ def run_adv_attacks(args):
     print(f'Running evaluation of adversarial attacks:')
     # adv_runner = AdvRunner(args.model, args.attack_obj, args.data_RGB_size,
     #                        device=args.device, dtype=args.dtype, verbose=args.runner_verbose)
-    # combinations = [[False, False, False],
-    #                 [True, False, False],
-    #                 [True, False, True],
-    #                 [True, True, False],
-    #                 [True, True, True]]
+    combinations = [[False, False, False],
+                    [True, False, False],
+                    [True, False, True],
+                    [True, True, False],
+                    [True, True, True]]
     
-    # for conf_comb in combinations:
-    #     classes_combinations = [[0, 1, 3, 7, 8, 9],
-    #                             [1, 6, 7, 8, 9],
-    #                             [0, 2, 3, 4, 5]] if conf_comb[2] else [[0]]
+    for conf_comb in combinations:
+        classes_combinations = [[0, 1, 3, 7, 8, 9],
+                                [1, 6, 7, 8, 9],
+                                [0, 2, 3, 4, 5]] if conf_comb[2] else [[0]]
             
-    #     for class_comb in classes_combinations:
-    #         print(f"Removing classes: {class_comb}")
-    # adv_runner = UniversalAdvRunner(args.model, args.attack_obj, args.data_RGB_size, 
-    #                         args.device, args.dtype, *conf_comb, class_comb, verbose=args.runner_verbose)
-    adv_runner = AutoAttack(args.model, attacks_to_run=['apgd-ce'], eps=args.eps_l_inf, version = 'universal')
-    print(f'Dataset: {args.dataset}, Model: {args.model_name},\n'
-        f'Attack: {args.attack_name} with L_inf epsilon={args.eps_l_inf},\n'
-        f'Attack iterations={args.n_iter} and restarts={args.n_restarts}')
-    print("Shape of input samples:")
-    print(args.data_shape)
-    print("Data RGB range:")
-    print(list(zip(args.data_RGB_start, args.data_RGB_end)))
+        for class_comb in classes_combinations:
+            print(f"Running on configuration: {conf_comb}")
+            print(f"Removing classes: {class_comb}")
+            adv_runner = UniversalAdvRunner(args.model, args.attack_obj, args.data_RGB_size, 
+                                    args.device, args.dtype, *conf_comb, class_comb, verbose=args.runner_verbose)
+            # adv_runner = AutoAttack(args.model, attacks_to_run=['apgd-ce'], eps=args.eps_l_inf, version = 'universal')
+            print(f'Dataset: {args.dataset}, Model: {args.model_name},\n'
+                f'Attack: {args.attack_name} with L_inf epsilon={args.eps_l_inf},\n'
+                f'Attack iterations={args.n_iter} and restarts={args.n_restarts}')
+            print("Shape of input samples:")
+            print(args.data_shape)
+            print("Data RGB range:")
+            print(list(zip(args.data_RGB_start, args.data_RGB_end)))
 
-    args.attack_obj.report_schematics()
-    att_report_info = args.attack_obj.report_info
+            args.attack_obj.report_schematics()
+            att_report_info = args.attack_obj.report_info
 
 
-    # (init_accuracy, x_adv, y_adv, robust_accuracy, adv_loss,
-    # acc_steps, avg_loss_steps, perts_max_l_inf,
-    # adv_batch_compute_time_mean, adv_batch_compute_time_std, tot_adv_compute_time, tot_adv_compute_time_std) = \
-    #     adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
+            # (init_accuracy, x_adv, y_adv, robust_accuracy, adv_loss,
+            # acc_steps, avg_loss_steps, perts_max_l_inf,
+            # adv_batch_compute_time_mean, adv_batch_compute_time_std, tot_adv_compute_time, tot_adv_compute_time_std) = \
+            #     adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
 
-    _ = adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
+            _ = adv_runner.run_standard_evaluation(args.x_test, args.y_test, args.n_examples, bs=args.batch_size)
 
     # adv_succ_ratio = (init_accuracy - robust_accuracy) / init_accuracy
     # print("reporting results for adversarial attack on Model: " + args.model_name)
